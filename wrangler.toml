@@ -1,0 +1,47 @@
+name = "helper-connect"
+main = "src/worker/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[vars]
+ENVIRONMENT = "production"
+# APP_ORIGIN = "https://helper-connect.<your-subdomain>.workers.dev"  (set after first deploy)
+# MAX_BULK_RECIPIENTS = "50"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "helper-connect"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"   # npx wrangler d1 create helper-connect
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["*/15 * * * *"]   # message/attachment expiry + housekeeping (Cron Triggers are free; no Queues needed)
+
+# Optional, free-tier friendly: machine translation of messages (Workers AI)
+# [ai]
+# binding = "AI"
+
+# Optional, requires a payment method on the Cloudflare account -> attachments stay disabled without it
+# [[r2_buckets]]
+# binding = "ATTACHMENTS"
+# bucket_name = "helper-connect-attachments"
+
+[env.staging]
+name = "helper-connect-staging"
+vars = { ENVIRONMENT = "staging", DEV_EXPOSE_TOKENS = "false" }
+[env.staging.assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "helper-connect-staging"
+database_id = "REPLACE_WITH_STAGING_D1_ID"
+migrations_dir = "migrations"

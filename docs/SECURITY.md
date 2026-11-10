@@ -1,0 +1,11 @@
+# Security notes (not a certification)
+- Passwords: PBKDF2-SHA256 100k iterations, per-user salt; no plaintext. Lockout after 10 failures, D1-backed rate limits, generic responses (no account enumeration).
+- Sessions: random token, only its hash stored; HttpOnly + SameSite=Strict cookie; password reset revokes all sessions.
+- CSRF: `X-HC-CSRF` header required on mutations plus Origin check.
+- Headers: CSP, X-Frame-Options, nosniff, referrer policy via middleware.
+- Tenant isolation: `owner_id` on every table, composite foreign keys, owner-scoped queries, 404 for foreign IDs; covered by IDOR tests (`test/api.test.ts`).
+- Admin: no access to business data; aggregates only, behind a 1-hour reason-required, audited grant.
+- Helper portal: no accounts; hashed, revocable 30-day tokens; unknown/expired/revoked return identical 404.
+- Money integrity: integer cents; DB triggers block overpayment; partial unique indexes block double-booking; idempotency keys + duplicate guard; payments are voided, not deleted.
+- Messages: 24h expiry enforced server-side in every read query, content erased by cron.
+- Not done: external penetration test, dependency audit automation, WAF/Turnstile on signup, 2FA, formal threat model review. Do not claim certification.

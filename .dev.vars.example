@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `wrangler dev` (never commit .dev.vars)
+ENVIRONMENT=development
+DEV_EXPOSE_TOKENS=true        # returns verify/reset tokens in API responses ONLY when ENVIRONMENT != production
+# RESEND_API_KEY=          # optional: real email delivery (free tier at resend.com)
+# EMAIL_FROM="Helper Connect <noreply@yourdomain.com>"
+# APP_ORIGIN=http://localhost:8787
