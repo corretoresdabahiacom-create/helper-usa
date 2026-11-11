@@ -13,3 +13,4 @@ curl -fs localhost:8787/api/health >/dev/null
 node e2e/pages-smoke.cjs
 node e2e/create-helper.cjs
 node e2e/finance-flow.cjs
+node e2e/expenses-messaging.cjs
