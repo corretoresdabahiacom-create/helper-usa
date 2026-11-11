@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
   const email = `e2e${Date.now()}@example.com`, pw = 'Sup3rSecret99';
   const r = await (await fetch(B + '/api/auth/register', { method: 'POST', headers: H, body: JSON.stringify({ email, password: pw, full_name: 'E2E User', state: 'FL', city: 'Miami', language: 'en', accept_terms: true }) })).json();
   await fetch(B + '/api/auth/verify-email', { method: 'POST', headers: H, body: JSON.stringify({ token: r.dev_token }) });
-  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 390, height: 800 } });
+  const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}); const ctx = await b.newContext({ viewport: { width: 390, height: 800 } });
   const p = await ctx.newPage(); const errs = [];
   p.on('console', m => { if (m.type() === 'error') errs.push(p.url() + ' console: ' + m.text()); });
   p.on('pageerror', e => errs.push(p.url() + ' pageerror: ' + e.message));
@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
     const overflow = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     const txt = (await p.innerText('body')).slice(0, 80).replace(/\n/g, ' | ');
     console.log(path.padEnd(14), overflow ? 'H-OVERFLOW' : 'ok', '|', txt);
-    await p.screenshot({ path: `/tmp/e2e/p${path.replace(/\W/g, '_')}.png` });
+    await p.screenshot({ path: `/tmp/p${path.replace(/\W/g, '_')}.png` });
   }
   // create helper through UI
   await p.goto(B + '/helpers'); const btn = await p.$('text=/new helper/i'); console.log('new helper btn', !!btn);

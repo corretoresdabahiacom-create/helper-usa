@@ -57,7 +57,7 @@ function Receivables() {
       {!list.data ? <Loading /> : <div className="card tablewrap"><table><thead><tr><th>{t('fin.customer')}</th><th>{t('fin.dueDate')}</th><th className="num">{t('common.amount')}</th><th className="num">{t('fin.received')}</th><th>{t('common.status')}</th><th /></tr></thead><tbody>
         {list.data.receivables.length === 0 && <tr><td colSpan={6} className="muted">{t('common.none')}</td></tr>}
         {list.data.receivables.map((r: any) => <tr key={r.id}><td>{r.customer}<div className="small muted">{r.description}{r.project_name ? ` · ${r.project_name}` : ''}</div></td><td className="nowrap">{fmtDate(r.due_date, lang)}</td><td className="num">{fmtMoney(r.original_cents, r.currency, lang)}</td><td className="num">{fmtMoney(r.received_cents, r.currency, lang)}</td><td><Badge kind={SK[r.display_status]}>{t(`st.${r.display_status}`)}</Badge></td>
-          <td className="nowrap">{r.outstanding_cents > 0 && r.status === 'open' && <><button className="small" onClick={() => setPay({ id: r.id, customer: r.customer, outstanding: r.outstanding_cents, amount: (r.outstanding_cents / 100).toFixed(2), method: 'zelle', date: today(tz), key: crypto.randomUUID() })}>{t('fin.receive')}</button>{' '}
+          <td className="nowrap">{r.outstanding_cents > 0 && ['open', 'partial', 'overdue'].includes(r.status) && <><button className="small" onClick={() => setPay({ id: r.id, customer: r.customer, outstanding: r.outstanding_cents, amount: (r.outstanding_cents / 100).toFixed(2), method: 'zelle', date: today(tz), key: crypto.randomUUID() })}>{t('fin.receive')}</button>{' '}
             <button className="small secondary" onClick={() => { const reason = prompt(t('fin.writeOffPrompt')); if (reason) act(() => post(`/finance/receivables/${r.id}/write-off`, { reason })); }}>{t('fin.writeOff')}</button></>}</td></tr>)}</tbody></table></div>}
     </div>
   );
@@ -95,7 +95,7 @@ function Expenses() {
       {!list.data ? <Loading /> : <div className="card tablewrap"><table><thead><tr><th>{t('common.description')}</th><th>{t('fin.dueDate')}</th><th className="num">{t('common.amount')}</th><th className="num">{t('pay.paid')}</th><th>{t('common.status')}</th><th /></tr></thead><tbody>
         {list.data.expenses.length === 0 && <tr><td colSpan={6} className="muted">{t('common.none')}</td></tr>}
         {list.data.expenses.map((x: any) => <tr key={x.id}><td>{x.description}<div className="small muted">{x.payee} · {x.category_name} · {fmtDate(x.expense_date, lang)}</div></td><td className="nowrap">{fmtDate(x.due_date, lang)}</td><td className="num">{fmtMoney(x.amount_cents, x.currency, lang)}</td><td className="num">{fmtMoney(x.paid_cents, x.currency, lang)}</td><td><Badge kind={SK[x.display_status]}>{t(`st.${x.display_status}`)}</Badge></td>
-          <td>{x.outstanding_cents > 0 && x.status === 'open' && <button className="small" onClick={() => setPay({ id: x.id, description: x.description, amount: (x.outstanding_cents / 100).toFixed(2), method: 'zelle', date: today(tz), key: crypto.randomUUID() })}>{t('fin.pay')}</button>}</td></tr>)}</tbody></table></div>}
+          <td>{x.outstanding_cents > 0 && ['open', 'partial', 'overdue'].includes(x.status) && <button className="small" onClick={() => setPay({ id: x.id, description: x.description, amount: (x.outstanding_cents / 100).toFixed(2), method: 'zelle', date: today(tz), key: crypto.randomUUID() })}>{t('fin.pay')}</button>}</td></tr>)}</tbody></table></div>}
     </div>
   );
 }
