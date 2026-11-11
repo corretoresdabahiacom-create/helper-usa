@@ -10,13 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Check deploy credentials and D1 id
+        id: gate
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then echo "::warning::Skipping deploy: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets."; echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.go == 'true'
+      - name: Refuse placeholder D1 id
+        if: steps.gate.outputs.go == 'true'
+        run: if grep -q REPLACE_WITH_YOUR_D1_DATABASE_ID wrangler.toml; then echo "::error::wrangler.toml still has the placeholder database_id"; exit 1; fi
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.go == 'true'
         with: { node-version: 22 }
-      - run: npm ci
-      - run: npm run typecheck && npm test
-      - run: npm run build
-      - run: npx wrangler d1 migrations apply DB --remote
+      - if: steps.gate.outputs.go == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.go == 'true'
+        run: npm run typecheck && npm test
+      - if: steps.gate.outputs.go == 'true'
+        run: npm run build
+      - if: steps.gate.outputs.go == 'true'
+        run: npx wrangler d1 migrations apply DB --remote
         env: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" }
-      - run: npx wrangler deploy
+      - if: steps.gate.outputs.go == 'true'
+        run: npx wrangler deploy
         env: { CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}", CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" }
