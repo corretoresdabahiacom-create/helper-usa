@@ -1,6 +1,6 @@
 # Test report
-Command: `npm run typecheck; npm test; npm run build` — typecheck clean, 59 tests passing, Vite build OK (this environment, Node 22).
-Files: `smoke` (1), `api` (16: auth, IDOR, helpers, work, payments), `finance` (13: partials, installments, DRE/cash separation, overdue), `messaging` (8: 24h expiry, bulk separation, consent/opt-out, portal), `shared` (18: money parse/allocate, validation), `i18n` (3: EN/PT/ES key parity, placeholders, static key usage).
+Command: `npm run typecheck; npm test; npm run build` — typecheck clean, 74 tests passing, Vite build OK (this environment, Node 22).
+Files: `smoke` (1), `api` (16: auth, IDOR, helpers, work, payments), `finance` (13: partials, installments, DRE/cash separation, overdue), `messaging` (8: 24h expiry, bulk separation, consent/opt-out, portal), `shared` (18: money parse/allocate, validation), `i18n` (3: EN/PT/ES key parity, placeholders, static key usage), `security` (11: RFC 6238 TOTP vectors, secret encryption, 2FA enable/login/replay/recovery/disable/lockout, Turnstile fail-closed, body size limit), `routes-auth` (4: every one of the >80 API routes rejects unauthenticated calls unless on an explicit public list; CSRF/Origin; security headers).
 Caveat: tests run against a Node `node:sqlite` shim of D1, not real Workers/D1. Not covered: browser/E2E UI tests, accessibility audit, load testing, real Cloudflare deployment, email delivery.
 
 ## Browser E2E (`npm run e2e`, Playwright/Chromium, 390px)
@@ -8,4 +8,5 @@ Runs against `wrangler dev --local` (workerd + fresh local D1; `e2e/run.sh` rese
 Bug found and fixed by this phase: Receive/Pay buttons were hidden for partial/overdue receivables and expenses (only `open`).
 Locally set `CHROMIUM_PATH` if the pre-installed browser differs from Playwright's pinned version. The CI `e2e` job (`.github/workflows/ci.yml`) is written but has NOT been run on GitHub yet.
 `expenses-messaging`: expense $500 overdue -> partial $200 -> overpay rejected -> paid; DRE total expenses and cash flow count it once. Bulk message UI offers only consented helpers, creates one separate conversation per recipient; helper opens the invite link with no account (sees only own thread), replies, contractor sees it; invalid token shows a generic error; helper opt-out blocks further sends (API 4xx + UI notice). Design note: a single message to a helper with consent "unknown" is allowed with a UI warning; bulk requires consent.
-Not covered: 24h expiry in the browser (covered by API tests with a clock override), attachments/translation (disabled), tablet/desktop widths, Firefox/Safari, accessibility audit.
+`security.cjs`: 2FA setup through Settings, login with TOTP then with a recovery code (one-time), wrong codes rejected, CSP + security headers on static pages and no CSP violations across all E2E runs.
+Not covered: Turnstile widget in the browser (needs real Cloudflare keys; server side is unit-tested), 24h expiry in the browser (covered by API tests with a clock override), attachments/translation (disabled), tablet/desktop widths, Firefox/Safari, accessibility audit.

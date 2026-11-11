@@ -8,6 +8,8 @@ import {
 } from '../core';
 import { defaultCategoryStatements } from '../defaults';
 import { sendAuthEmail } from '../mail';
+import { verifyTurnstile } from '../services/turnstile';
+import { decryptSecret, encryptSecret, newRecoveryCode, newTotpSecret, otpauthUri, verifyTotp } from '../services/totp';
 
 const SESSION_DAYS = 30;
 const HOUR = 3_600_000;
@@ -65,6 +67,7 @@ const registerSchema = z.object({
   city: shortText(1, 120),
   language: lang3.default('en'),
   accept_terms: z.literal(true),
+  turnstile_token: z.string().max(2048).optional(),
 });
 
 export const authRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
@@ -72,6 +75,7 @@ export const authRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 authRoutes.post('/register', async (c) => {
   await rateLimit(c, 'register', clientIp(c), 10, 3600);
   const b = await parseBody(c as any, registerSchema);
+  await verifyTurnstile(c.env, b.turnstile_token, clientIp(c));
   const now = iso(c.get('now'));
   const exists = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(b.email).first();
   const generic = { ok: true, verify_email_sent: true };
@@ -116,12 +120,13 @@ authRoutes.post('/verify-email', async (c) => {
 const DUMMY_HASH = 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 authRoutes.post('/login', async (c) => {
-  const b = await parseBody(c as any, z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(200) }));
+  const b = await parseBody(c as any, z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(200), code: z.string().trim().max(32).optional(), turnstile_token: z.string().max(2048).optional() }));
+  await verifyTurnstile(c.env, b.turnstile_token, clientIp(c));
   await rateLimit(c, 'login-ip', clientIp(c), 30, 900);
   await rateLimit(c, 'login-email', b.email, 8, 900);
   const now = c.get('now');
   const nowStr = iso(now);
-  const u = await c.env.DB.prepare('SELECT id, password_hash, status, failed_logins, locked_until FROM users WHERE email = ?').bind(b.email).first<any>();
+  const u = await c.env.DB.prepare('SELECT id, password_hash, status, failed_logins, locked_until, totp_secret, totp_enabled_at, totp_last_step FROM users WHERE email = ?').bind(b.email).first<any>();
   if (u?.locked_until && u.locked_until > nowStr) throw new HttpError(429, 'account_locked');
   const ok = await verifyPassword(b.password, u?.password_hash ?? DUMMY_HASH);
   if (!u || !ok) {
@@ -135,9 +140,23 @@ authRoutes.post('/login', async (c) => {
   }
   if (u.status === 'pending') throw new HttpError(403, 'email_not_verified');
   if (u.status !== 'active') throw new HttpError(403, 'account_suspended');
+  let newStep: number | null = null;
+  if (u.totp_enabled_at) {
+    if (!b.code) throw new HttpError(401, 'totp_required');
+    const good = await checkSecondFactor(c.env, u, b.code, now);
+    if (!good) {
+      const fails = u.failed_logins + 1;
+      await c.env.DB.batch([
+        c.env.DB.prepare('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?').bind(fails, fails >= 10 ? iso(new Date(now.getTime() + 15 * 60_000)) : null, u.id),
+        auditStmt(c.env.DB, { scope: 'security', ownerId: u.id, action: 'login_2fa_failed', at: nowStr }),
+      ]);
+      throw new HttpError(401, 'invalid_code');
+    }
+    newStep = good.step;
+  }
   const token = randomToken();
   await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?').bind(u.id),
+    c.env.DB.prepare('UPDATE users SET failed_logins = 0, locked_until = NULL, totp_last_step = COALESCE(?, totp_last_step) WHERE id = ?').bind(newStep, u.id),
     c.env.DB.prepare('INSERT INTO sessions (id, user_id, token_hash, user_agent, created_at, expires_at) VALUES (?,?,?,?,?,?)')
       .bind(newId(), u.id, await sha256Hex(token), (c.req.header('user-agent') ?? '').slice(0, 200), nowStr, iso(new Date(now.getTime() + SESSION_DAYS * 24 * HOUR))),
     auditStmt(c.env.DB, { scope: 'security', ownerId: u.id, actorId: u.id, action: 'login', at: nowStr }),
@@ -147,7 +166,8 @@ authRoutes.post('/login', async (c) => {
 });
 
 authRoutes.post('/forgot-password', async (c) => {
-  const { email } = await parseBody(c as any, z.object({ email: z.string().trim().toLowerCase().email() }));
+  const { email, turnstile_token } = await parseBody(c as any, z.object({ email: z.string().trim().toLowerCase().email(), turnstile_token: z.string().max(2048).optional() }));
+  await verifyTurnstile(c.env, turnstile_token, clientIp(c));
   await rateLimit(c, 'forgot', clientIp(c), 10, 3600);
   const u = await c.env.DB.prepare("SELECT u.id, p.language FROM users u JOIN contractor_profiles p ON p.user_id = u.id WHERE u.email = ? AND u.status = 'active'").bind(email).first<any>();
   const out: Record<string, unknown> = { ok: true };
@@ -184,6 +204,18 @@ authRoutes.use('/me', requireAuth);
 authRoutes.use('/sessions/*', requireAuth);
 authRoutes.use('/sessions', requireAuth);
 authRoutes.use('/change-password', requireAuth);
+
+/** Verifies a TOTP code (with replay protection) or a one-time recovery code. Returns {step} for TOTP or {recovery:true}. */
+async function checkSecondFactor(env: Env, u: { id: string; totp_secret: string; totp_last_step: number }, code: string, now: Date): Promise<{ step: number | null } | null> {
+  if (!env.TOTP_ENC_KEY || !u.totp_secret) return null;
+  if (/^\d{6}$/.test(code)) {
+    const step = await verifyTotp(await decryptSecret(u.totp_secret, env.TOTP_ENC_KEY), code, now.getTime(), u.totp_last_step);
+    return step === null ? null : { step };
+  }
+  const h = await sha256Hex(code.toLowerCase().replace(/\s/g, ''));
+  const r = await env.DB.prepare('UPDATE recovery_codes SET used_at = ? WHERE user_id = ? AND code_hash = ? AND used_at IS NULL').bind(iso(now), u.id, h).run();
+  return (r.meta?.changes ?? 0) > 0 ? { step: null } : null;
+}
 
 authRoutes.post('/logout', async (c) => {
   await c.env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE id = ?').bind(nowIso(c as any), c.get('user').sessionId).run();
@@ -228,6 +260,63 @@ authRoutes.post('/change-password', async (c) => {
     c.env.DB.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').bind(await hashPassword(b.new_password), now, u.id),
     c.env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL').bind(now, u.id, u.sessionId),
     audit(c as any, 'security', 'password_changed'),
+  ]);
+  return c.json({ ok: true });
+});
+
+// ───── Two-factor (TOTP) ─────
+authRoutes.use('/2fa/*', requireAuth);
+const needKey = (env: Env) => { if (!env.TOTP_ENC_KEY) throw new HttpError(503, 'two_factor_unavailable'); };
+
+authRoutes.get('/2fa/status', async (c) => {
+  const r = await c.env.DB.prepare('SELECT totp_enabled_at FROM users WHERE id = ?').bind(c.get('user').id).first<any>();
+  const left = await c.env.DB.prepare('SELECT COUNT(*) n FROM recovery_codes WHERE user_id = ? AND used_at IS NULL').bind(c.get('user').id).first<any>();
+  return c.json({ available: !!c.env.TOTP_ENC_KEY, enabled: !!r?.totp_enabled_at, recovery_codes_left: r?.totp_enabled_at ? left.n : 0 });
+});
+
+authRoutes.post('/2fa/setup', async (c) => {
+  needKey(c.env); const u = c.get('user');
+  const b = await parseBody(c as any, z.object({ password: z.string().max(200) }));
+  const row = await c.env.DB.prepare('SELECT password_hash, totp_enabled_at FROM users WHERE id = ?').bind(u.id).first<any>();
+  if (!row || !(await verifyPassword(b.password, row.password_hash))) throw new HttpError(403, 'invalid_credentials');
+  if (row.totp_enabled_at) throw new HttpError(409, 'two_factor_already');
+  const secret = newTotpSecret();
+  await c.env.DB.prepare('UPDATE users SET totp_secret = ?, totp_last_step = 0 WHERE id = ?').bind(await encryptSecret(secret, c.env.TOTP_ENC_KEY!), u.id).run();
+  return c.json({ secret, otpauth_uri: otpauthUri(u.email, secret) });
+});
+
+authRoutes.post('/2fa/enable', async (c) => {
+  needKey(c.env); const u = c.get('user');
+  const b = await parseBody(c as any, z.object({ code: z.string().trim().regex(/^\d{6}$/) }));
+  const row = await c.env.DB.prepare('SELECT totp_secret, totp_enabled_at, totp_last_step FROM users WHERE id = ?').bind(u.id).first<any>();
+  if (!row?.totp_secret) throw new HttpError(409, 'two_factor_not_setup');
+  if (row.totp_enabled_at) throw new HttpError(409, 'two_factor_already');
+  await rateLimit(c as any, '2fa-enable', u.id, 10, 900);
+  const step = await verifyTotp(await decryptSecret(row.totp_secret, c.env.TOTP_ENC_KEY!), b.code, c.get('now').getTime(), 0);
+  if (step === null) throw new HttpError(400, 'invalid_code');
+  const now = iso(c.get('now')); const codes = Array.from({ length: 8 }, newRecoveryCode);
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE users SET totp_enabled_at = ?, totp_last_step = ? WHERE id = ?').bind(now, step, u.id),
+    c.env.DB.prepare('DELETE FROM recovery_codes WHERE user_id = ?').bind(u.id),
+    ...(await Promise.all(codes.map(async (code) => c.env.DB.prepare('INSERT INTO recovery_codes (id, user_id, code_hash, created_at) VALUES (?,?,?,?)').bind(newId(), u.id, await sha256Hex(code), now)))),
+    c.env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id <> ? AND revoked_at IS NULL').bind(now, u.id, u.sessionId),
+    audit(c as any, 'security', '2fa_enabled'),
+  ]);
+  return c.json({ ok: true, recovery_codes: codes }); // shown once; only hashes are stored
+});
+
+authRoutes.post('/2fa/disable', async (c) => {
+  needKey(c.env); const u = c.get('user');
+  const b = await parseBody(c as any, z.object({ password: z.string().max(200), code: z.string().trim().max(32) }));
+  await rateLimit(c as any, '2fa-disable', u.id, 10, 900);
+  const row = await c.env.DB.prepare('SELECT id, password_hash, totp_secret, totp_enabled_at, totp_last_step FROM users WHERE id = ?').bind(u.id).first<any>();
+  if (!row?.totp_enabled_at) throw new HttpError(409, 'two_factor_not_setup');
+  if (!(await verifyPassword(b.password, row.password_hash))) throw new HttpError(403, 'invalid_credentials');
+  if (!(await checkSecondFactor(c.env, row, b.code, c.get('now')))) throw new HttpError(400, 'invalid_code');
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE users SET totp_secret = NULL, totp_enabled_at = NULL, totp_last_step = 0 WHERE id = ?').bind(u.id),
+    c.env.DB.prepare('DELETE FROM recovery_codes WHERE user_id = ?').bind(u.id),
+    audit(c as any, 'security', '2fa_disabled'),
   ]);
   return c.json({ ok: true });
 });

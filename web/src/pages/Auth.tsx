@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { post } from '../api';
+import { ApiError, post } from '../api';
+import { useTurnstile } from '../components/Turnstile';
 import { useI18n } from '../i18n';
 import { useSession } from '../session';
 import { Alert, ErrorBox, Field } from '../ui';
@@ -18,17 +19,25 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+
 export function Login() {
   const { t } = useI18n(); const { refresh } = useSession(); const nav = useNavigate();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [err, setErr] = useState<unknown>(null); const [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent) { e.preventDefault(); setBusy(true); setErr(null); try { await post('/auth/login', { email, password }); await refresh(); nav('/'); } catch (x) { setErr(x); } setBusy(false); }
+  const [code, setCode] = useState(''); const [needCode, setNeedCode] = useState(false); const ts = useTurnstile();
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setErr(null);
+    try { await post('/auth/login', { email, password, ...(code ? { code } : {}), ...(ts.enabled ? { turnstile_token: ts.token } : {}) }); await refresh(); nav('/'); }
+    catch (x) { if (x instanceof ApiError && x.code === 'totp_required') setNeedCode(true); else setErr(x); ts.reset(); }
+    setBusy(false);
+  }
   return (
     <Frame title={t('auth.login')}>
       <form onSubmit={submit}>
         <Field label={t('auth.email')} id="em"><input id="em" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         <Field label={t('auth.password')} id="pw"><input id="pw" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
-        <ErrorBox error={err} />
-        <div className="row between" style={{ marginTop: '.75rem' }}><button disabled={busy}>{t('auth.login')}</button><Link to="/forgot">{t('auth.forgot')}</Link></div>
+        {needCode && <Field label={t('auth.code')} hint={t('auth.codeHint')} id="tc"><input id="tc" inputMode="numeric" autoComplete="one-time-code" autoFocus required value={code} onChange={(e) => setCode(e.target.value)} /></Field>}
+        {ts.widget}<ErrorBox error={err} />
+        <div className="row between" style={{ marginTop: '.75rem' }}><button disabled={busy || (ts.enabled && !ts.token)}>{t('auth.login')}</button><Link to="/forgot">{t('auth.forgot')}</Link></div>
       </form>
       <p className="small">{t('auth.noAccount')} <Link to="/register">{t('auth.register')}</Link></p>
     </Frame>
@@ -39,10 +48,10 @@ export function Register() {
   const { t, lang } = useI18n(); const { meta } = useSession();
   const [f, setF] = useState({ email: '', password: '', full_name: '', business_name: '', state: 'TX', city: '', accept: false });
   const [err, setErr] = useState<unknown>(null); const [done, setDone] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const set = (k: string, v: any) => setF((p) => ({ ...p, [k]: v }));
+  const set = (k: string, v: any) => setF((p) => ({ ...p, [k]: v })); const ts = useTurnstile();
   async function submit(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
-    try { const r = await post('/auth/register', { email: f.email, password: f.password, full_name: f.full_name, business_name: f.business_name || null, state: f.state, city: f.city, language: lang, accept_terms: f.accept }); setDone(r.dev_token ?? ''); } catch (x) { setErr(x); }
+    try { const r = await post('/auth/register', { email: f.email, password: f.password, full_name: f.full_name, business_name: f.business_name || null, state: f.state, city: f.city, language: lang, accept_terms: f.accept, ...(ts.enabled ? { turnstile_token: ts.token } : {}) }); setDone(r.dev_token ?? ''); } catch (x) { setErr(x); ts.reset(); }
     setBusy(false);
   }
   if (done !== null) return <Frame title={t('auth.checkEmail')}><Alert kind="ok">{t('auth.verifySent')}</Alert>{done && <Alert kind="warn">DEV: <Link to={`/verify?token=${done}`}>{t('auth.verify')}</Link></Alert>}<Link to="/login">{t('auth.login')}</Link></Frame>;
@@ -59,7 +68,7 @@ export function Register() {
         <Field label={t('auth.password')} hint={t('auth.pwHint')} id="pw"><input id="pw" type="password" required minLength={10} autoComplete="new-password" value={f.password} onChange={(e) => set('password', e.target.value)} /></Field>
         <label style={{ display: 'flex', gap: '.5rem', fontWeight: 400 }}><input type="checkbox" required checked={f.accept} onChange={(e) => set('accept', e.target.checked)} /><span>{t('auth.accept')} <Link to="/legal/terms" target="_blank">{t('legal.terms')}</Link> / <Link to="/legal/privacy" target="_blank">{t('legal.privacy')}</Link></span></label>
         <ErrorBox error={err} />
-        <button disabled={busy} style={{ marginTop: '.75rem' }}>{t('auth.register')}</button>
+        {ts.widget}<button disabled={busy || (ts.enabled && !ts.token)} style={{ marginTop: '.75rem' }}>{t('auth.register')}</button>
       </form>
       <p className="small"><Link to="/login">{t('auth.haveAccount')}</Link></p>
     </Frame>
@@ -67,11 +76,11 @@ export function Register() {
 }
 
 export function Forgot() {
-  const { t } = useI18n(); const [email, setEmail] = useState(''); const [sent, setSent] = useState<string | null>(null); const [err, setErr] = useState<unknown>(null);
-  async function submit(e: FormEvent) { e.preventDefault(); setErr(null); try { const r = await post('/auth/forgot-password', { email }); setSent(r.dev_token ?? ''); } catch (x) { setErr(x); } }
+  const { t } = useI18n(); const [email, setEmail] = useState(''); const [sent, setSent] = useState<string | null>(null); const [err, setErr] = useState<unknown>(null); const ts = useTurnstile();
+  async function submit(e: FormEvent) { e.preventDefault(); setErr(null); try { const r = await post('/auth/forgot-password', { email, ...(ts.enabled ? { turnstile_token: ts.token } : {}) }); setSent(r.dev_token ?? ''); } catch (x) { setErr(x); ts.reset(); } }
   return (
     <Frame title={t('auth.forgot')}>
-      {sent === null ? <form onSubmit={submit}><Field label={t('auth.email')} id="em"><input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field><ErrorBox error={err} /><button>{t('auth.sendReset')}</button></form>
+      {sent === null ? <form onSubmit={submit}><Field label={t('auth.email')} id="em"><input id="em" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>{ts.widget}<ErrorBox error={err} /><button disabled={ts.enabled && !ts.token}>{t('auth.sendReset')}</button></form>
         : <><Alert kind="ok">{t('auth.resetSent')}</Alert>{sent && <Alert kind="warn">DEV: <Link to={`/reset?token=${sent}`}>reset</Link></Alert>}</>}
       <Link to="/login">{t('auth.login')}</Link>
     </Frame>

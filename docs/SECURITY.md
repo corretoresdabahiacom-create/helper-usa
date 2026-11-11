@@ -8,4 +8,10 @@
 - Helper portal: no accounts; hashed, revocable 30-day tokens; unknown/expired/revoked return identical 404.
 - Money integrity: integer cents; DB triggers block overpayment; partial unique indexes block double-booking; idempotency keys + duplicate guard; payments are voided, not deleted.
 - Messages: 24h expiry enforced server-side in every read query, content erased by cron.
-- Not done: external penetration test, dependency audit automation, WAF/Turnstile on signup, 2FA, formal threat model review. Do not claim certification.
+- 2FA (TOTP, RFC 6238): secret encrypted at rest with AES-GCM (TOTP_ENC_KEY), ±1 step drift, replayed codes rejected, 8 one-time recovery codes stored hashed, wrong codes count toward lockout, enabling revokes other sessions, disabling needs password + code. No QR code (manual key entry or otpauth link).
+- Turnstile (optional): server-verified on register, login and forgot-password; fails closed if configured and verification fails or errors.
+- Static asset CSP (`web/public/_headers`): self-only scripts plus Cloudflare Turnstile, no framing, no inline scripts. `style-src` allows inline styles (React style attributes).
+- Input limits: JSON bodies capped at 256 KB (413), uploads 5 MB.
+- Dependencies: `npm audit --omit=dev` reports 0 vulnerabilities as of 2026-11-11 (react-router-dom 7.18, zod 4.6.7); enforced at high severity in CI.
+- Automated route audit: all >80 API routes reject unauthenticated calls except an explicit public list (`test/routes-auth.test.ts`).
+- Not done: external penetration test (brief ready: `PENTEST_BRIEF.md`), 2FA not mandatory for admins yet, no WebAuthn/passkeys, no SMS, no formal threat-model review, no WAF rules beyond Cloudflare defaults, no automated secret rotation. Do not claim certification.

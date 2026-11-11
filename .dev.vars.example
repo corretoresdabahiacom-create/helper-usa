@@ -4,3 +4,9 @@ DEV_EXPOSE_TOKENS=true        # returns verify/reset tokens in API responses ONL
 # RESEND_API_KEY=          # optional: real email delivery (free tier at resend.com)
 # EMAIL_FROM="Helper Connect <noreply@yourdomain.com>"
 # APP_ORIGIN=http://localhost:8787
+
+# 32-byte base64 key that encrypts 2FA secrets. Generate your own: node -e "console.log(crypto.randomBytes(32).toString('base64'))"
+TOTP_ENC_KEY=BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=
+# Optional Cloudflare Turnstile (free): site key + secret
+#TURNSTILE_SITE_KEY=
+#TURNSTILE_SECRET=

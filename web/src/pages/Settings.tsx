@@ -4,7 +4,7 @@ import { del, download, get, patch, post, put } from '../api';
 import { fmtDateTime, normalizeMoneyInput } from '../format';
 import { useI18n } from '../i18n';
 import { useSession } from '../session';
-import { Alert, ErrorBox, Field, MoneyInput, useAsync } from '../ui';
+import { Alert, Badge, ErrorBox, Field, Loading, MoneyInput, useAsync } from '../ui';
 
 export default function Settings() {
   const { t, lang, setLang } = useI18n(); const { me, meta, refresh, logout } = useSession(); const nav = useNavigate();
@@ -38,12 +38,37 @@ export default function Settings() {
         <h2>{t('set.security')}</h2><div className="grid g2"><Field label={t('set.currentPw')} id="cp"><input id="cp" type="password" autoComplete="current-password" required value={pw.current_password} onChange={(e) => setPw({ ...pw, current_password: e.target.value })} /></Field><Field label={t('auth.newPassword')} hint={t('auth.pwHint')} id="np"><input id="np" type="password" autoComplete="new-password" required minLength={10} value={pw.new_password} onChange={(e) => setPw({ ...pw, new_password: e.target.value })} /></Field></div><div><button>{t('set.changePw')}</button></div>
         <h3>{t('set.sessions')}</h3>{sess.data?.sessions.map((s: any) => <div className="list-item" key={s.id}><div className="grow small">{s.user_agent || '—'}<div className="muted">{fmtDateTime(s.created_at, lang)} {s.current && `· ${t('set.current')}`}</div></div>{!s.current && <button type="button" className="small secondary" onClick={() => run(() => del(`/auth/sessions/${s.id}`))}>{t('set.revoke')}</button>}</div>)}
         <div><button type="button" className="secondary" onClick={() => run(() => post('/auth/sessions/revoke-others'))}>{t('set.revokeOthers')}</button></div></form>
+      <TwoFactor />
       <form className="card stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => { await post('/support', sup); setSup({ subject: '', body: '' }); }, t('set.supportSent')); }}><h2>{t('set.support')}</h2>
         <Field label={t('set.subject')} id="su"><input id="su" required minLength={3} value={sup.subject} onChange={(e) => setSup({ ...sup, subject: e.target.value })} /></Field><Field label={t('msg.message')} id="sb"><textarea id="sb" required minLength={5} value={sup.body} onChange={(e) => setSup({ ...sup, body: e.target.value })} /></Field><div><button>{t('msg.send')}</button></div></form>
       <div className="card stack"><h2>{t('set.privacy')}</h2><div className="row"><button className="secondary" onClick={() => download('/account/export', 'helper-connect-export.json').catch(setErr)}>{t('set.export')}</button>
         <Link className="btn secondary" to="/legal/terms">{t('legal.terms')}</Link><Link className="btn secondary" to="/legal/privacy">{t('legal.privacy')}</Link><Link className="btn secondary" to="/legal/messaging">{t('legal.messaging')}</Link><Link className="btn secondary" to="/legal/financial">{t('legal.financial')}</Link></div></div>
       <form className="card stack" style={{ borderColor: 'var(--red)' }} onSubmit={async (e: FormEvent) => { e.preventDefault(); if (!confirm(t('set.deleteConfirm'))) return; setErr(null); try { await del('/account', del1); await logout(); nav('/login'); } catch (x) { setErr(x); } }}>
         <h2>{t('set.delete')}</h2><Alert kind="bad">{t('set.deleteNote')}</Alert><div className="grid g2"><Field label={t('auth.password')} id="dp"><input id="dp" type="password" required value={del1.password} onChange={(e) => setDel1({ ...del1, password: e.target.value })} /></Field><Field label={t('set.typeDelete')} id="dc"><input id="dc" required value={del1.confirm} onChange={(e) => setDel1({ ...del1, confirm: e.target.value })} /></Field></div><div><button className="danger" disabled={del1.confirm !== 'DELETE'}>{t('set.delete')}</button></div></form>
+    </div>
+  );
+}
+
+function TwoFactor() {
+  const { t } = useI18n(); const st = useAsync(() => get('/auth/2fa/status'), []);
+  const [pw, setPw] = useState(''); const [code, setCode] = useState(''); const [setup, setSetup] = useState<{ secret: string; otpauth_uri: string } | null>(null);
+  const [codes, setCodes] = useState<string[] | null>(null); const [err, setErr] = useState<unknown>(null);
+  const run = async (fn: () => Promise<void>) => { setErr(null); try { await fn(); setPw(''); setCode(''); st.reload(); } catch (x) { setErr(x); } };
+  if (!st.data) return <div className="card"><Loading /></div>;
+  if (!st.data.available) return <div className="card stack"><h2>{t('set.2fa')}</h2><Alert kind="warn">{t('set.2faUnavailable')}</Alert></div>;
+  return (
+    <div className="card stack"><h2>{t('set.2fa')}</h2><p className="small">{t('set.2faIntro')}</p>
+      {codes && <Alert kind="ok"><strong>{t('set.2faCodes')}</strong><pre style={{ margin: '.5rem 0', userSelect: 'all' }} data-testid="recovery-codes">{codes.join('\n')}</pre><button type="button" className="small secondary" onClick={() => setCodes(null)}>{t('set.2faSaved')}</button></Alert>}
+      {!st.data.enabled && !setup && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => setSetup(await post('/auth/2fa/setup', { password: pw }))); }}>
+        <Field label={t('set.currentPw')} id="tfp"><input id="tfp" type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} /></Field><ErrorBox error={err} /><div><button>{t('set.2faStart')}</button></div></form>}
+      {!st.data.enabled && setup && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => { const r = await post('/auth/2fa/enable', { code }); setCodes(r.recovery_codes); setSetup(null); }); }}>
+        <p className="small">{t('set.2faAdd')}</p><code data-testid="totp-secret" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{setup.secret}</code>
+        <a className="small" href={setup.otpauth_uri}>{t('set.2faOpenApp')}</a>
+        <Field label={t('auth.code')} id="tfc"><input id="tfc" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></Field><ErrorBox error={err} /><div><button>{t('set.2faConfirm')}</button></div></form>}
+      {st.data.enabled && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => { await post('/auth/2fa/disable', { password: pw, code }); }); }}>
+        <Badge kind="ok">{t('set.2faOn')} · {t('set.2faLeft', { n: st.data.recovery_codes_left })}</Badge>
+        <div className="grid g2"><Field label={t('set.currentPw')} id="tfp"><input id="tfp" type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          <Field label={t('auth.code')} hint={t('auth.codeHint')} id="tfc"><input id="tfc" required value={code} onChange={(e) => setCode(e.target.value)} /></Field></div><ErrorBox error={err} /><div><button className="secondary">{t('set.2faDisable')}</button></div></form>}
     </div>
   );
 }

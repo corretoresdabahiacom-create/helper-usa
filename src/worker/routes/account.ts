@@ -25,6 +25,7 @@ metaRoutes.get('/meta', async (c) => {
     categories: cats.results,
     subcategories: subs.results,
     languages: ['en', 'pt', 'es'],
+    turnstile_site_key: c.env.TURNSTILE_SITE_KEY && c.env.TURNSTILE_SECRET ? c.env.TURNSTILE_SITE_KEY : null,
     currencies: ['USD', 'EUR', 'BRL', 'CAD', 'MXN'],
     payment_methods: ['cash', 'bank_transfer', 'check', 'zelle', 'card', 'other'],
     capabilities: {

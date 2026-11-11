@@ -15,6 +15,9 @@ export interface Env {
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   MAX_BULK_RECIPIENTS?: string;
+  TURNSTILE_SECRET?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TOTP_ENC_KEY?: string;
 }
 
 export interface AuthUser {
@@ -75,9 +78,16 @@ export const optText = (max = 2000) =>
   text(max).nullish().transform((v) => (v === undefined ? undefined : v ? v : null));
 export const uuid = z.string().uuid();
 
+export const MAX_JSON_BYTES = 256 * 1024;
+
 export async function parseBody<T extends ZodTypeAny>(c: Ctx, schema: T): Promise<z.infer<T>> {
   let data: unknown;
-  try { data = await c.req.json(); } catch { throw new HttpError(400, 'invalid_json'); }
+  // JSON bodies are capped (256 KB) before parsing to bound memory/CPU on hostile input; file uploads use their own 5 MB check.
+  const declared = Number(c.req.header('content-length') ?? 0);
+  if (declared > MAX_JSON_BYTES) throw new HttpError(413, 'payload_too_large');
+  const text = await c.req.text();
+  if (text.length > MAX_JSON_BYTES) throw new HttpError(413, 'payload_too_large');
+  try { data = JSON.parse(text); } catch { throw new HttpError(400, 'invalid_json'); }
   return parseWith(schema, data);
 }
 export function parseWith<T extends ZodTypeAny>(schema: T, data: unknown): z.infer<T> {

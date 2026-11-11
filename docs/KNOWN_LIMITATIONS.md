@@ -5,5 +5,5 @@
 4. Attachments (R2) and translation (Workers AI) are disabled without bindings and return 501/503 — no fake behavior.
 5. Email needs Resend config; otherwise only dev tokens in non-production.
 6. Single currency per report; multi-currency conversion not supported.
-7. Legal pages are drafts. No 2FA, no CAPTCHA, no SSO.
+7. Legal pages are drafts. 2FA is optional (not enforced for admins), no QR code for setup, no passkeys/SSO; Turnstile works only once you add keys.
 8. D1 free-tier limits apply (see COSTS_AND_COMPETITORS.md).
