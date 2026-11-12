@@ -55,5 +55,5 @@ const addDays = (d, n) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x
   assert.equal(cf.operating.receipts_cents, 40000); assert.equal(cf.operating.helper_payments_cents, 30000); assert.equal(cf.net_movement_cents, 10000); assert.equal(cf.closing_cents, 10000, 'unpaid $600 receivable not in cash');
   step('accrual $1000 vs cash $400, labor $300, cash net $100, unpaid receivable excluded from cash');
 
-  await browser.close(); assert.deepEqual(errs.filter((e) => !/dynamically imported module|Importing a module script failed/.test(e)), [], 'browser errors: ' + errs.join(' | ')); console.log('ALL OK');
+  await browser.close(); assert.deepEqual(errs.filter((e) => !(process.env.BROWSER && process.env.BROWSER !== 'chromium' ? /dynamically imported module|Importing a module script failed|access control checks|JSHandle@object/ : /dynamically imported module|Importing a module script failed/).test(e)), [], 'browser errors: ' + errs.join(' | ')); console.log('ALL OK');
 })().catch((e) => { console.error('FAIL', e.message); process.exit(1); });

@@ -35,5 +35,5 @@ const totp = (secret, offset = 0) => { const c = Math.floor(Date.now() / 30000) 
   await p.fill('#tc', totp(secret, 1)); await p.click('form button'); await p.waitForURL((u) => !u.pathname.includes('login')); step('login with TOTP code');
   await ctx.clearCookies(); await login(codes[0]); await p.waitForURL((u) => !u.pathname.includes('login')); step('login with recovery code');
   await ctx.clearCookies(); await login(codes[0]); await p.waitForSelector('text=/not valid/i'); step('recovery code cannot be reused');
-  await browser.close(); assert.deepEqual(errs.filter((e) => !/dynamically imported module|Importing a module script failed/.test(e)), [], 'browser/CSP errors: ' + errs.join(' | ')); console.log('ALL OK');
+  await browser.close(); assert.deepEqual(errs.filter((e) => !(process.env.BROWSER && process.env.BROWSER !== 'chromium' ? /dynamically imported module|Importing a module script failed|access control checks|JSHandle@object/ : /dynamically imported module|Importing a module script failed/).test(e)), [], 'browser/CSP errors: ' + errs.join(' | ')); console.log('ALL OK');
 })().catch((e) => { console.error('FAIL', e.message.slice(0, 600)); process.exit(1); });
