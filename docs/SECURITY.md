@@ -14,4 +14,5 @@
 - Input limits: JSON bodies capped at 256 KB (413), uploads 5 MB.
 - Dependencies: `npm audit --omit=dev` reports 0 vulnerabilities as of 2026-11-11 (react-router-dom 7.18, zod 4.6.7); enforced at high severity in CI.
 - Automated route audit: all >80 API routes reject unauthenticated calls except an explicit public list (`test/routes-auth.test.ts`).
-- Not done: external penetration test (brief ready: `PENTEST_BRIEF.md`), 2FA not mandatory for admins yet, no WebAuthn/passkeys, no SMS, no formal threat-model review, no WAF rules beyond Cloudflare defaults, no automated secret rotation. Do not claim certification.
+- Admins must have 2FA enabled to use `/api/admin/*` whenever the server has `TOTP_ENC_KEY` configured (otherwise admin works without it, because 2FA cannot be offered: set the key in production).
+- Not done: external penetration test (brief ready: `PENTEST_BRIEF.md`), no WebAuthn/passkeys, no SMS, no formal threat-model review, no WAF rules beyond Cloudflare defaults, no automated secret rotation. Do not claim certification.

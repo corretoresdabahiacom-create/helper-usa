@@ -81,7 +81,7 @@ export const en: Record<string, string> = {
   'set.2faIntro': 'Adds a second step at sign-in using an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy).',
   'set.2faUnavailable': 'Two-factor authentication is not enabled on this server yet.',
   'set.2faStart': 'Set up',
-  'set.2faAdd': 'Add this key to your authenticator app (enter it manually), then type the 6-digit code it shows.',
+  'set.2faAdd': 'Add this key to your authenticator app (scan the QR code or enter it manually), then type the 6-digit code it shows.',
   'set.2faOpenApp': 'Open in authenticator app',
   'set.2faConfirm': 'Turn on',
   'set.2faOn': 'Two-factor is on',
@@ -96,4 +96,6 @@ export const en: Record<string, string> = {
   'err.two_factor_not_setup': 'Two-factor setup was not started.',
   'err.two_factor_already': 'Two-factor is already on.',
   'err.payload_too_large': 'The request is too large.',
+  'err.two_factor_required': 'Administrators must turn on two-factor authentication in Settings first.',
+  'set.2faQrAlt': 'QR code for your authenticator app',
 };

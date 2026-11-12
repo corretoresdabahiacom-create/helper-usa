@@ -54,6 +54,11 @@ export const requireAuth: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> 
 
 export const requireAdmin: MiddlewareHandler<{ Bindings: Env; Variables: Vars }> = async (c, next) => {
   if (!c.get('user')?.isAdmin) throw new HttpError(403, 'forbidden');
+  // Admins must use 2FA whenever the server can offer it (TOTP_ENC_KEY configured). They can still reach /api/auth/2fa/* to enable it.
+  if (c.env.TOTP_ENC_KEY) {
+    const r = await c.env.DB.prepare('SELECT totp_enabled_at FROM users WHERE id = ?').bind(c.get('user').id).first<{ totp_enabled_at: string | null }>();
+    if (!r?.totp_enabled_at) throw new HttpError(403, 'two_factor_required');
+  }
   await next();
 };
 

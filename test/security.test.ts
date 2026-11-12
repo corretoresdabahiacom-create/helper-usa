@@ -111,3 +111,16 @@ describe('request size limits', () => {
     expect(res.status).toBe(413); expect(res.json.error).toBe('payload_too_large');
   });
 });
+
+describe('admin 2FA enforcement', () => {
+  it('admin needs 2FA when the server supports it; works again after enabling', async () => {
+    const env = makeEnv({ TOTP_ENC_KEY: KEY, CLOCK_OVERRIDE: iso(T0) });
+    const { c, email } = await signup(env);
+    const uid = env.DB.db.prepare('SELECT id FROM users WHERE email = ?').get(email).id;
+    env.DB.db.prepare("INSERT INTO administrator_roles (user_id, role, created_at) VALUES (?, 'super_admin', ?)").run(uid, iso(T0));
+    const blocked = await c.call('GET', '/api/admin/metrics'); expect(blocked.status).toBe(403); expect(blocked.json.error).toBe('two_factor_required');
+    const s = await c.call('POST', '/api/auth/2fa/setup', { password: 'Str0ngPassw0rd' });
+    expect((await c.call('POST', '/api/auth/2fa/enable', { code: await totpAt(s.json.secret, T0) })).status).toBe(200);
+    expect((await c.call('GET', '/api/admin/metrics')).status).toBe(200);
+  });
+});

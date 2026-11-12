@@ -1,9 +1,9 @@
 # Known limitations
 1. Not deployed; GitHub push and Cloudflare deploy were not performed (no authorization/credentials). CI/deploy workflows are written but never run.
-2. Tests use a SQLite shim, not real D1; no browser/E2E or accessibility tests; UI never visually QA'd on real devices.
+2. API tests use a SQLite shim, not real D1 (browser E2E runs on real workerd + local D1). Accessibility checked with axe only, no manual screen-reader testing; Firefox/WebKit run only in CI; never QA'd on physical devices.
 3. No automatic payments, payroll, tax filing; no real WhatsApp API (only wa.me links); no GPS/time-clock.
 4. Attachments (R2) and translation (Workers AI) are disabled without bindings and return 501/503 — no fake behavior.
 5. Email needs Resend config; otherwise only dev tokens in non-production.
 6. Single currency per report; multi-currency conversion not supported.
-7. Legal pages are drafts. 2FA is optional (not enforced for admins), no QR code for setup, no passkeys/SSO; Turnstile works only once you add keys.
+7. Legal pages are drafts. 2FA is optional for contractors (enforced for admins when TOTP_ENC_KEY is set), no passkeys/SSO; Turnstile works only once you add keys.
 8. D1 free-tier limits apply (see COSTS_AND_COMPETITORS.md).

@@ -81,7 +81,7 @@ export const pt: Record<string, string> = {
   'set.2faIntro': 'Adiciona uma segunda etapa no login com um app autenticador (Google Authenticator, Microsoft Authenticator, 1Password, Authy).',
   'set.2faUnavailable': 'A autenticação em dois fatores ainda não está habilitada neste servidor.',
   'set.2faStart': 'Configurar',
-  'set.2faAdd': 'Adicione esta chave ao seu app autenticador (digitando manualmente) e digite o código de 6 dígitos que ele mostrar.',
+  'set.2faAdd': 'Adicione esta chave ao seu app autenticador (escaneando o QR code ou digitando manualmente) e digite o código de 6 dígitos que ele mostrar.',
   'set.2faOpenApp': 'Abrir no app autenticador',
   'set.2faConfirm': 'Ativar',
   'set.2faOn': 'Dois fatores ativado',
@@ -96,4 +96,6 @@ export const pt: Record<string, string> = {
   'err.two_factor_not_setup': 'A configuração de dois fatores não foi iniciada.',
   'err.two_factor_already': 'Dois fatores já está ativado.',
   'err.payload_too_large': 'A requisição é grande demais.',
+  'err.two_factor_required': 'Administradores precisam ativar a autenticação em dois fatores em Ajustes antes.',
+  'set.2faQrAlt': 'QR code para o seu app autenticador',
 };

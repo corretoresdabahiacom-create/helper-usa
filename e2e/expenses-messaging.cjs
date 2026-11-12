@@ -10,7 +10,7 @@ const step = (n) => console.log('✓', n);
   const email = `exp${Date.now()}@example.com`, pw = 'Sup3rSecret99';
   const r = await (await fetch(B + '/api/auth/register', { method: 'POST', headers: H, body: JSON.stringify({ email, password: pw, full_name: 'Exp E2E', state: 'TX', city: 'Austin', language: 'en', accept_terms: true }) })).json();
   await fetch(B + '/api/auth/verify-email', { method: 'POST', headers: H, body: JSON.stringify({ token: r.dev_token }) });
-  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+  const browser = await require('playwright')[process.env.BROWSER || 'chromium'].launch(process.env.CHROMIUM_PATH && !process.env.BROWSER ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } }); const p = await ctx.newPage();
   const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/401|404|409/.test(m.text())) errs.push(m.text()); });
   const api = async (path, init) => (await ctx.request.fetch(B + '/api' + path, { headers: H, ...init })).json();

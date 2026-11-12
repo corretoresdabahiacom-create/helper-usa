@@ -13,7 +13,7 @@ const totp = (secret, offset = 0) => { const c = Math.floor(Date.now() / 30000) 
   const email = `sec${Date.now()}@example.com`, pw = 'Sup3rSecret99';
   const r = await (await fetch(B + '/api/auth/register', { method: 'POST', headers: H, body: JSON.stringify({ email, password: pw, full_name: 'Sec E2E', state: 'NY', city: 'Albany', language: 'en', accept_terms: true }) })).json();
   await fetch(B + '/api/auth/verify-email', { method: 'POST', headers: H, body: JSON.stringify({ token: r.dev_token }) });
-  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+  const browser = await require('playwright')[process.env.BROWSER || 'chromium'].launch(process.env.CHROMIUM_PATH && !process.env.BROWSER ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } }); const p = await ctx.newPage();
   const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/status of 40[01]/.test(m.text())) errs.push(m.text()); });
   const login = async (code) => { await p.goto(B + '/login'); await p.fill('input[type=email]', email); await p.fill('input[type=password]', pw); await p.click('form button'); if (code === undefined) return p.waitForURL((u) => !u.pathname.includes('login')); await p.waitForSelector('#tc'); await p.fill('#tc', code); await p.click('form button'); };
@@ -22,6 +22,7 @@ const totp = (secret, offset = 0) => { const c = Math.floor(Date.now() / 30000) 
   assert.match(csp, /default-src 'self'/); assert.match(csp, /frame-ancestors 'none'/); assert.equal(home.headers()['x-frame-options'], 'DENY'); step('static pages carry CSP + security headers');
   await login(); await p.goto(B + '/settings'); await p.waitForSelector('text=Two-factor authentication');
   await p.fill('#tfp', pw); await p.click('button:has-text("Set up")'); await p.waitForSelector('[data-testid=totp-secret]');
+  const qr = await p.locator('img[alt^="QR code"]'); assert.equal(await qr.count(), 1, 'QR code shown'); assert.ok((await qr.getAttribute('src')).startsWith('data:image/'), 'QR is a local data URL'); step('QR code rendered locally');
   const secret = (await p.innerText('[data-testid=totp-secret]')).trim(); assert.match(secret, /^[A-Z2-7]{32}$/);
   await p.fill('#tfc', '000000'); await p.click('button:has-text("Turn on")'); await p.waitForSelector('text=/not valid/i'); step('wrong code rejected during setup');
   await p.fill('#tfc', totp(secret)); await p.click('button:has-text("Turn on")'); await p.waitForSelector('[data-testid=recovery-codes]');

@@ -1,3 +1,4 @@
+import qrcode from 'qrcode-generator';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { del, download, get, patch, post, put } from '../api';
@@ -49,6 +50,12 @@ export default function Settings() {
   );
 }
 
+/** Renders the otpauth:// URI as a QR code image (generated locally in the browser; nothing is sent anywhere). */
+function QrImage({ text, label }: { text: string; label: string }) {
+  const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
+  return <img alt={label} src={qr.createDataURL(5, 8)} width={200} height={200} style={{ imageRendering: 'pixelated', background: '#fff', alignSelf: 'center' }} />;
+}
+
 function TwoFactor() {
   const { t } = useI18n(); const st = useAsync(() => get('/auth/2fa/status'), []);
   const [pw, setPw] = useState(''); const [code, setCode] = useState(''); const [setup, setSetup] = useState<{ secret: string; otpauth_uri: string } | null>(null);
@@ -62,7 +69,7 @@ function TwoFactor() {
       {!st.data.enabled && !setup && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => setSetup(await post('/auth/2fa/setup', { password: pw }))); }}>
         <Field label={t('set.currentPw')} id="tfp"><input id="tfp" type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} /></Field><ErrorBox error={err} /><div><button>{t('set.2faStart')}</button></div></form>}
       {!st.data.enabled && setup && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => { const r = await post('/auth/2fa/enable', { code }); setCodes(r.recovery_codes); setSetup(null); }); }}>
-        <p className="small">{t('set.2faAdd')}</p><code data-testid="totp-secret" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{setup.secret}</code>
+        <p className="small">{t('set.2faAdd')}</p><QrImage text={setup.otpauth_uri} label={t('set.2faQrAlt')} /><code data-testid="totp-secret" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{setup.secret}</code>
         <a className="small" href={setup.otpauth_uri}>{t('set.2faOpenApp')}</a>
         <Field label={t('auth.code')} id="tfc"><input id="tfc" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} /></Field><ErrorBox error={err} /><div><button>{t('set.2faConfirm')}</button></div></form>}
       {st.data.enabled && <form className="stack" onSubmit={(e: FormEvent) => { e.preventDefault(); run(async () => { await post('/auth/2fa/disable', { password: pw, code }); }); }}>

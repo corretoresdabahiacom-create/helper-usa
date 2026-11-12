@@ -15,3 +15,4 @@ node e2e/create-helper.cjs
 node e2e/finance-flow.cjs
 node e2e/expenses-messaging.cjs
 node e2e/security.cjs
+node e2e/a11y.cjs
