@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
-    continue-on-error: ${{ matrix.browser != 'chromium' }}   # Firefox/WebKit are first-run: report, don't block, until proven stable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

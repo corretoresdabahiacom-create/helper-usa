@@ -1,6 +1,6 @@
 # Known limitations
 1. Not deployed; GitHub push and Cloudflare deploy were not performed (no authorization/credentials). CI/deploy workflows are written but never run.
-2. API tests use a SQLite shim, not real D1 (browser E2E runs on real workerd + local D1). Accessibility checked with axe only, no manual screen-reader testing; Firefox/WebKit run only in CI; never QA'd on physical devices.
+2. API tests use a SQLite shim, not real D1 (browser E2E runs on real workerd + local D1). Accessibility checked with axe only, no manual screen-reader testing; Firefox/WebKit are covered by CI only; never QA'd on physical devices.
 3. No automatic payments, payroll, tax filing; no real WhatsApp API (only wa.me links); no GPS/time-clock.
 4. Attachments (R2) and translation (Workers AI) are disabled without bindings and return 501/503 — no fake behavior.
 5. Email needs Resend config; otherwise only dev tokens in non-production.
